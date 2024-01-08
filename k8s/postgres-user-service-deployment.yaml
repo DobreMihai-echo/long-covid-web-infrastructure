@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: postgres-user-service
+  name: postgres-user-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-user-service
+  template:
+    metadata:
+      labels:
+        app: postgres-user-service
+    spec:
+      initContainers:
+        - name: remove-lost-found
+          image: busybox
+          command: ['sh', '-c', 'rm -rf /data/postgres/user/lost+found']
+          volumeMounts:
+            - mountPath: /data/postgres/user
+              name: postgres-user-service-claim0
+      containers:
+        - env:
+            - name: PGDATA
+              value: /data/postgres/user
+            - name: POSTGRES_DB
+              value: userdb
+            - name: POSTGRES_PASSWORD
+              value: password
+            - name: POSTGRES_USER
+              value: userprod
+          image: postgres
+          name: postgres-user-service
+          ports:
+            - containerPort: 5432
+          resources:
+            limits:
+              cpu: "250m"
+              memory: "1Gi"
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+          volumeMounts:
+            - mountPath: /data/postgres/user
+              name: postgres-user-service-claim0
+      restartPolicy: Always
+      volumes:
+        - name: postgres-user-service-claim0
+          persistentVolumeClaim:
+            claimName: postgres-user-service-claim0
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: postgres-user-service
+  name: postgres-user-service
+spec:
+  ports:
+    - name: "5432"
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-user-service
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: postgres-user-service-claim0
+  name: postgres-user-service-claim0
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+status: {}
